@@ -9,15 +9,16 @@
 # - webapps
 Summary:	OpenX allows you to traffic, target, monetize and track the advertising on all of your websites
 Name:		openx
-Version:	2.8.1
-Release:	0.7
+Version:	2.8.2
+Release:	0.10
 License:	GPL v2
 Group:		Applications/WWW
 Source0:	http://download.openx.org/%{name}-%{version}.zip
-# Source0-md5:	9eed70d3ea24d06a11db03a546f0bf63
+# Source0-md5:	429e85d4017948b1857c4ab9d01276bb
 URL:		http://www.openx.org/ad-server
 BuildRequires:	rpmbuild(macros) >= 1.461
 Requires:	fonts-TTF-bitstream-vera
+Requires:	fonts-TTF-microsoft
 Requires:	php-common >= 4:5.1.4
 Requires:	php-gd
 Requires:	php-mysql
@@ -32,6 +33,7 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 %define		_appdir		%{_datadir}/%{_webapp}
 %define		_appdir		%{_datadir}/%{_webapp}
 %define		ttffontsdir	%{_fontsdir}/TTF
+%define		cachedir	/var/cache/%{name}
 
 %description
 OpenX is the world's leading independent ad server. It provides you
@@ -100,6 +102,9 @@ EOF
 
 find -name .htaccess | xargs rm
 
+# undos
+find '(' -name '*.php' -o -name '*.html' ')' -print0 | xargs -0 %{__sed} -i -e 's,\r$,,'
+
 # fix doc urls. pointed out on:
 # http://forum.openx.org/index.php?s=4221111bd7f513019f5f12da048203ac&showtopic=503422007&mode=linearplus
 sed -i -e '
@@ -108,11 +113,30 @@ sed -i -e '
 	s#".OX_PRODUCT_DOCSURL."/wizard/setup-cron#http://www.openx.org/en/docs/2.8/adminguide/Running+maintenance#
 ' lib/max/language/*/settings.lang.php
 
+
+# cachedir
+rm var/cache/README.txt
+grep -rl '/var/cache' . | xargs sed -i -e "
+	s,MAX_PATH *\. *'/var/cache','%{cachedir}',g
+	s,MAX_PATH *\. *'/var/cache/','%{cachedir}',g
+	s,'../var/cache','%{cachedir}',g
+	s,/path/to/openx/var/cache/,%{cachedir},g
+"
+
+# we will only CLI mode
+rm -rf maintenance
+
 # fonts-TTF-bitstream-vera
 sed -i -e "
 	s#MAX_PATH.'/lib/fonts/Bitstream/#'%{ttffontsdir}/#
 " lib/OA/Dashboard/Graph.php
 rm -rf lib/fonts
+
+# fonts-TTF-microsoft
+sed -i -e "
+	s,.GLOBALS['_MAX']['CONF']['graphs']['ttfDirectory'],'%{ttffontsdir}',
+" constants.php
+rm -f lib/pear/Image/Canvas/Fonts/{README,*.ttf}
 
 # move all to docs subdir for easier packaging. except robots.txt
 mv *.txt docs
@@ -120,14 +144,14 @@ mv docs/robots.txt .
 
 %install
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_sysconfdir},%{_appdir}}
+install -d $RPM_BUILD_ROOT{%{_sysconfdir},%{_appdir},%{cachedir}}
 
 cp -a apache.conf $RPM_BUILD_ROOT%{_sysconfdir}/apache.conf
 cp -a apache.conf $RPM_BUILD_ROOT%{_sysconfdir}/httpd.conf
 cp -a lighttpd.conf $RPM_BUILD_ROOT%{_sysconfdir}/lighttpd.conf
 
 cp -a *.php *.js *.txt $RPM_BUILD_ROOT%{_appdir}
-cp -a etc lib maintenance plugins scripts var www $RPM_BUILD_ROOT%{_appdir}
+cp -a etc lib plugins scripts var www $RPM_BUILD_ROOT%{_appdir}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -166,12 +190,21 @@ rm -rf $RPM_BUILD_ROOT
 %{_appdir}/robots.txt
 %{_appdir}/etc
 %{_appdir}/lib
-%{_appdir}/maintenance
+
 %dir %{_appdir}/scripts
-%{_appdir}/scripts/maintenance
+
+%dir %{_appdir}/scripts/maintenance
+%{_appdir}/scripts/maintenance/translationStrings.php
+%attr(755,root,root) %{_appdir}/scripts/maintenance/maintenance*.php
+
+%dir %{_appdir}/scripts/maintenance/tools
+%attr(755,root,root) %{_appdir}/scripts/maintenance/tools/*.php
+
+%dir %{_appdir}/scripts/maintenance/plot-maintenance-times
+%attr(755,root,root) %{_appdir}/scripts/maintenance/tools/plot
+%attr(755,root,root) %{_appdir}/scripts/maintenance/tools/extract
 
 %dir %attr(775,root,http) %{_appdir}/var
-%dir %attr(775,root,http) %{_appdir}/var/cache
 %dir %attr(775,root,http) %{_appdir}/var/plugins
 %dir %attr(775,root,http) %{_appdir}/var/templates_compiled
 %dir %attr(775,root,http) %{_appdir}/plugins
@@ -196,7 +229,10 @@ rm -rf $RPM_BUILD_ROOT
 
 %dir %attr(775,root,http) %{_appdir}/www/admin/plugins
 
+%dir %attr(775,root,http) %{cachedir}
+
 %files setup
 %defattr(644,root,root,755)
 #%{_appdir}/www/admin
 #%{_appdir}/etc/changes
+#%{_appdir}/etc/tables_core.xml
