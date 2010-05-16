@@ -17,6 +17,7 @@ Source0:	http://download.openx.org/%{name}-%{version}.zip
 # Source0-md5:	429e85d4017948b1857c4ab9d01276bb
 URL:		http://www.openx.org/ad-server
 BuildRequires:	rpmbuild(macros) >= 1.461
+BuildRequires:	unzip
 Requires:	fonts-TTF-bitstream-vera
 Requires:	fonts-TTF-microsoft
 Requires:	php-common >= 4:5.1.4
